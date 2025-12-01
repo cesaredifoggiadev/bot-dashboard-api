@@ -1,17 +1,22 @@
-import * as functions from "firebase-functions";
-import admin from 'firebase-admin';
-import { ProactiveEngine } from "./ProactiveEngine/ProactiveEngine";
+import { onRequest } from "firebase-functions/v2/https";
+import { initializeApp } from "firebase-admin/app"
+import { getFirestore } from "firebase-admin/firestore";
+import { ProactiveEngine } from "./ProactiveEngine";
 import { DEFAULT_SETTINGS } from "./ProactiveEngine/types";
 import { FirestoreService } from "./ProactiveEngine/firestoreService";
 
 
-admin.initializeApp();
-export const db = admin.firestore();
+initializeApp();
+export const db = getFirestore();
 
-// Collezione Firestore per memorizzare gli stati dei mazzi
-const deckStates = db.collection("deckStates");
-
-export const index = functions.https.onRequest(async (req, res) => {
+export const test = onRequest({
+    region: 'europe-west3',
+    timeoutSeconds: 120,
+    memory: '512MiB',
+    maxInstances: 10
+},
+    async (req, res) => {
+    const deckStates = db.collection("deckStates");
     let retValue = "0";
 
     try {
@@ -45,6 +50,12 @@ export const index = functions.https.onRequest(async (req, res) => {
         const hasCompleteData = computer && tavolo && pbt && margine &&
                                 colpoMartingala && mazzo;
 
+        // 🚀 SE MANCANO DATI STOPPIAMO QUI
+        if (!hasCompleteData) {
+            res.send(retValue);
+            return;
+        }
+        
         // 💾 Salva parametri request in Firestore (ex upI_Values)
         const valuesBatch = db.batch();
         Object.keys(req.query).forEach(k => {
@@ -60,12 +71,6 @@ export const index = functions.https.onRequest(async (req, res) => {
             }
         });
         await valuesBatch.commit();
-
-        // 🚀 SE MANCANO DATI STOPPIAMO QUI
-        if (!hasCompleteData) {
-            res.send(retValue);
-            return;
-        }
 
         try {
             const tableId = parseInt(tavolo);
